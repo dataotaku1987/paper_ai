@@ -1,32 +1,42 @@
 import streamlit as st
+import zipfile
 import os
 import json
 import google.generativeai as genai
+import tempfile
 
-# API 설정
+# Gemini API 설정
 genai.configure(api_key="AIzaSyCLl_NUXwjgupjnMMnqAZ5XPVN3BDpHtCs")
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-st.title("📁 폴더 기반 논문 분석 시스템")
+st.title("📦 ZIP 기반 논문 분석 시스템")
 
-folder_path = st.text_input("논문 JSON 파일들이 들어있는 폴더 경로를 입력하세요:")
+uploaded_zip = st.file_uploader("논문 JSON 파일들이 들어있는 ZIP 파일을 업로드하세요", type=["zip"])
 question = st.text_input("AI에게 물어볼 질문을 입력하세요:")
 
 ask = st.button("질문하기")
 
-if folder_path and question and ask:
+if uploaded_zip and question and ask:
     try:
         context_list = []
-        for filename in os.listdir(folder_path):
-            if filename.endswith(".json"):
-                with open(os.path.join(folder_path, filename), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    sections = data["packages"]["gpt"]["sections"]
-                    title = sections.get("title", "")
-                    abstract = sections.get("abstract", "")
-                    method = sections.get("methodology", "")
-                    result = sections.get("results", "")
-                    context_list.append(f"📄 제목: {title}\n[초록]\n{abstract}\n[방법론]\n{method}\n[결과]\n{result}\n")
+
+        # 임시 폴더에 ZIP 파일 풀기
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with zipfile.ZipFile(uploaded_zip, "r") as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            for filename in os.listdir(temp_dir):
+                if filename.endswith(".json"):
+                    with open(os.path.join(temp_dir, filename), "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        sections = data["packages"]["gpt"]["sections"]
+                        title = sections.get("title", "")
+                        abstract = sections.get("abstract", "")
+                        method = sections.get("methodology", "")
+                        result = sections.get("results", "")
+                        context_list.append(
+                            f"📄 제목: {title}\n[초록]\n{abstract}\n[방법론]\n{method}\n[결과]\n{result}\n"
+                        )
 
         full_context = "\n\n---\n\n".join(context_list)
 
@@ -44,5 +54,4 @@ if folder_path and question and ask:
         st.write(response.text)
 
     except Exception as e:
-        st.error(f"오류 발생: {str(e)}")
-
+        st.error(f"❗ 오류 발생: {str(e)}")
